@@ -1,0 +1,138 @@
+{
+  "name": "Watch and Auto-Expand Freeplane Mind Map",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/path/to/watch",
+        "event": "update"
+      },
+      "name": "Watch Mind Map Directory",
+      "type": "n8n-nodes-base.filesWatcher",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"tool\": \"read_mindmap\",\n  \"arguments\": {\n    \"file_path\": \"{{$json[\"path\"]}}\",\n    \"max_depth\": 3\n  }\n}"
+      },
+      "name": "Read Mind Map",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"content\"]}}",
+              "operation": "contains",
+              "value2": "[EXPAND]"
+            }
+          ]
+        }
+      },
+      "name": "Check for Expand Markers",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract node IDs that have [EXPAND] marker\nconst content = items[0].json.content;\nconst lines = content.split('\\n');\nconst nodesToExpand = [];\n\nfor (const line of lines) {\n  if (line.includes('[EXPAND]')) {\n    // Extract node ID from the mind map structure\n    // This is simplified - you'd need to parse the actual node IDs\n    const nodeId = line.match(/\\[ID_[^\\]]+\\]/);\n    if (nodeId) {\n      nodesToExpand.push({\n        nodeId: nodeId[0].replace(/[\\[\\]]/g, ''),\n        text: line.replace('[EXPAND]', '').trim()\n      });\n    }\n  }\n}\n\nreturn nodesToExpand.map(node => ({json: node}));"
+      },
+      "name": "Extract Nodes to Expand",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"expand_node_with_ai\",\n  \"arguments\": {\n    \"file_path\": \"{{$node[\"Watch Mind Map Directory\"].json[\"path\"]}}\",\n    \"node_id\": \"{{$json[\"nodeId\"]}}\",\n    \"num_subtopics\": 5\n  }\n}"
+      },
+      "name": "Expand Node with AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "message": "=Expanded node: {{$json[\"nodeId\"]}}",
+        "additionalFields": {}
+      },
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    }
+  ],
+  "connections": {
+    "Watch Mind Map Directory": {
+      "main": [
+        [
+          {
+            "node": "Read Mind Map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Mind Map": {
+      "main": [
+        [
+          {
+            "node": "Check for Expand Markers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Expand Markers": {
+      "main": [
+        [
+          {
+            "node": "Extract Nodes to Expand",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Nodes to Expand": {
+      "main": [
+        [
+          {
+            "node": "Expand Node with AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand Node with AI": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

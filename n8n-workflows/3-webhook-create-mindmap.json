@@ -1,0 +1,156 @@
+{
+  "name": "Create Mind Map from Webhook/API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "create-mindmap",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook - Create Mind Map",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "create-mindmap-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Expected webhook payload:\n// {\n//   \"topic\": \"Main topic\",\n//   \"file_path\": \"/path/to/new-mindmap.mm\"\n// }\n\nconst topic = items[0].json.body.topic;\nconst filePath = items[0].json.body.file_path || `/tmp/mindmap-${Date.now()}.mm`;\n\nreturn [{\n  json: {\n    topic: topic,\n    filePath: filePath\n  }\n}];"
+      },
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"create_mindmap\",\n  \"arguments\": {\n    \"file_path\": \"{{$json[\"filePath\"]}}\",\n    \"root_text\": \"{{$json[\"topic\"]}}\"\n  }\n}"
+      },
+      "name": "Create Mind Map File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"read_mindmap\",\n  \"arguments\": {\n    \"file_path\": \"{{$node[\"Validate Input\"].json[\"filePath\"]}}\",\n    \"max_depth\": 5\n  }\n}"
+      },
+      "name": "Get Root Node ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract root node ID from the mind map content\nconst content = items[0].json.content;\nconst match = content.match(/ID_[A-Za-z0-9_]+/);\nconst rootNodeId = match ? match[0] : null;\n\nreturn [{\n  json: {\n    rootNodeId: rootNodeId,\n    filePath: items[0].json.filePath,\n    topic: items[0].json.topic\n  }\n}];"
+      },
+      "name": "Extract Root Node ID",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"expand_node_with_ai\",\n  \"arguments\": {\n    \"file_path\": \"{{$json[\"filePath\"]}}\",\n    \"node_id\": \"{{$json[\"rootNodeId\"]}}\",\n    \"prompt\": \"Generate a comprehensive breakdown of this topic\",\n    \"num_subtopics\": 7\n  }\n}"
+      },
+      "name": "Auto-Expand Root Node",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Mind map created successfully\",\n  \"file_path\": \"{{$node[\"Extract Root Node ID\"].json[\"filePath\"]}}\",\n  \"root_node_id\": \"{{$node[\"Extract Root Node ID\"].json[\"rootNodeId\"]}}\",\n  \"expanded\": true\n}"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Create Mind Map": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Create Mind Map File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Mind Map File": {
+      "main": [
+        [
+          {
+            "node": "Get Root Node ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Root Node ID": {
+      "main": [
+        [
+          {
+            "node": "Extract Root Node ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Root Node ID": {
+      "main": [
+        [
+          {
+            "node": "Auto-Expand Root Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Expand Root Node": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

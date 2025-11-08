@@ -1,0 +1,32 @@
+{
+  "name": "freeplane-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Freeplane mind mapping integration with AI capabilities",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "freeplane-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "freeplane",
+    "mindmap",
+    "ai",
+    "automation"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@anthropic-ai/sdk": "^0.30.0",
+    "fast-xml-parser": "^4.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

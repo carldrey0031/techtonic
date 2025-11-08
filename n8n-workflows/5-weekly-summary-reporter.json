@@ -1,0 +1,196 @@
+{
+  "name": "Weekly Mind Map Summary Reporter",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "name": "Trigger Every Monday 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "path": "/mindmaps",
+        "filters": {
+          "recursive": true
+        }
+      },
+      "name": "List All Mind Map Files",
+      "type": "n8n-nodes-base.filesDirectory",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter for .mm files modified in the last 7 days\nconst sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);\nconst recentMindMaps = items.filter(item => {\n  const path = item.json.path;\n  const modified = item.json.modified || 0;\n  return path.endsWith('.mm') && modified > sevenDaysAgo;\n});\n\nreturn recentMindMaps;"
+      },
+      "name": "Filter Recent Mind Maps",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"read_mindmap\",\n  \"arguments\": {\n    \"file_path\": \"{{$json[\"path\"]}}\",\n    \"max_depth\": 2\n  }\n}"
+      },
+      "name": "Read Each Mind Map",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "name": "Combine All Mind Maps",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Create a comprehensive summary of all mind maps\nlet summary = '# Weekly Mind Map Activity Report\\n\\n';\nsummary += `Week of ${new Date().toISOString().split('T')[0]}\\n\\n`;\nsummary += `Total Active Mind Maps: ${items.length}\\n\\n`;\n\nfor (const item of items) {\n  const filePath = item.json.path || 'Unknown';\n  const fileName = filePath.split('/').pop();\n  const content = item.json.content || '';\n  \n  summary += `## ${fileName}\\n`;\n  summary += `Path: ${filePath}\\n`;\n  summary += `\\n${content.split('\\n').slice(0, 10).join('\\n')}\\n`;\n  summary += '\\n---\\n\\n';\n}\n\nreturn [{\n  json: {\n    summary: summary,\n    totalMaps: items.length\n  }\n}];"
+      },
+      "name": "Generate Summary Report",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$env.ANTHROPIC_API_KEY}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"model\": \"claude-sonnet-4-5-20250929\",\n  \"max_tokens\": 2048,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyze this weekly mind map activity report and provide insights, trends, and suggestions:\\n\\n{{$json[\"summary\"]}}\"\n    }\n  ]\n}"
+      },
+      "name": "AI Analysis of Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "toEmail": "team@yourdomain.com",
+        "subject": "=Weekly Mind Map Report - {{new Date().toISOString().split('T')[0]}}",
+        "emailType": "html",
+        "message": "=<h1>Weekly Mind Map Activity Report</h1>\n<p><strong>Active Maps:</strong> {{$node[\"Generate Summary Report\"].json[\"totalMaps\"]}}</p>\n\n<h2>AI Insights</h2>\n<div style=\"background: #f5f5f5; padding: 15px; border-radius: 5px;\">\n{{$json[\"content\"][0][\"text\"].replace(/\\n/g, '<br>')}}\n</div>\n\n<h2>Detailed Report</h2>\n<pre style=\"background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;\">\n{{$node[\"Generate Summary Report\"].json[\"summary\"]}}\n</pre>"
+      },
+      "name": "Send Weekly Report Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Trigger Every Monday 9 AM": {
+      "main": [
+        [
+          {
+            "node": "List All Mind Map Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List All Mind Map Files": {
+      "main": [
+        [
+          {
+            "node": "Filter Recent Mind Maps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Recent Mind Maps": {
+      "main": [
+        [
+          {
+            "node": "Read Each Mind Map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Each Mind Map": {
+      "main": [
+        [
+          {
+            "node": "Combine All Mind Maps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine All Mind Maps": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary Report": {
+      "main": [
+        [
+          {
+            "node": "AI Analysis of Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analysis of Activity": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

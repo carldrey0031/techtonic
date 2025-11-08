@@ -1,0 +1,115 @@
+{
+  "name": "Email to Mind Map Converter",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "from": "noreply@yourdomain.com",
+          "subject": "Mind Map:"
+        }
+      },
+      "name": "Email Trigger - Watch Inbox",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse email subject and body to create mind map structure\nconst subject = items[0].json.subject.replace('Mind Map:', '').trim();\nconst body = items[0].json.textPlain || items[0].json.textHtml;\n\n// Split body by lines and create hierarchy based on indentation\nconst lines = body.split('\\n').filter(line => line.trim());\nconst mainTopics = [];\n\nfor (const line of lines) {\n  if (line.startsWith('  ')) {\n    // Skip sub-items for now, we'll let AI expand them\n    continue;\n  }\n  const cleaned = line.trim().replace(/^[\\-\\*]\\s*/, '');\n  if (cleaned) {\n    mainTopics.push(cleaned);\n  }\n}\n\nreturn [{\n  json: {\n    rootTopic: subject,\n    initialChildren: mainTopics,\n    filePath: `/mindmaps/${subject.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}.mm`\n  }\n}];"
+      },
+      "name": "Parse Email Content",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"create_mindmap\",\n  \"arguments\": {\n    \"file_path\": \"{{$json[\"filePath\"]}}\",\n    \"root_text\": \"{{$json[\"rootTopic\"]}}\",\n    \"initial_children\": {{$json[\"initialChildren\"]}}\n  }\n}"
+      },
+      "name": "Create Mind Map from Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{$node[\"Email Trigger - Watch Inbox\"].json[\"from\"]}}",
+        "subject": "=Mind Map Created: {{$node[\"Parse Email Content\"].json[\"rootTopic\"]}}",
+        "emailType": "html",
+        "message": "=<h2>Your mind map has been created!</h2>\n<p><strong>Topic:</strong> {{$node[\"Parse Email Content\"].json[\"rootTopic\"]}}</p>\n<p><strong>File:</strong> {{$node[\"Parse Email Content\"].json[\"filePath\"]}}</p>\n<p><strong>Initial topics:</strong></p>\n<ul>\n{{$node[\"Parse Email Content\"].json[\"initialChildren\"].map(t => `<li>${t}</li>`).join('')}}\n</ul>\n<p>The mind map has been automatically generated and saved.</p>"
+      },
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "folderId": "your-google-drive-folder-id",
+        "options": {
+          "fileName": "={{$node[\"Parse Email Content\"].json[\"filePath\"].split('/').pop()}}"
+        }
+      },
+      "name": "Upload to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [850, 450]
+    }
+  ],
+  "connections": {
+    "Email Trigger - Watch Inbox": {
+      "main": [
+        [
+          {
+            "node": "Parse Email Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email Content": {
+      "main": [
+        [
+          {
+            "node": "Create Mind Map from Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Mind Map from Email": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upload to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

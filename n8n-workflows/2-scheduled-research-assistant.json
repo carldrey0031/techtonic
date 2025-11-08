@@ -1,0 +1,183 @@
+{
+  "name": "Scheduled Research Assistant for Mind Maps",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "name": "Schedule Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"read_mindmap\",\n  \"arguments\": {\n    \"file_path\": \"/path/to/research-topics.mm\",\n    \"max_depth\": 5\n  }\n}"
+      },
+      "name": "Read Research Mind Map",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"search_nodes\",\n  \"arguments\": {\n    \"file_path\": \"/path/to/research-topics.mm\",\n    \"search_text\": \"[RESEARCH]\",\n    \"case_sensitive\": false\n  }\n}"
+      },
+      "name": "Find Nodes Needing Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse the search results and extract node IDs\nconst results = items[0].json.content;\nconst matches = results.match(/\\[ID_[^\\]]+\\]/g) || [];\n\nreturn matches.map(id => ({\n  json: {\n    nodeId: id.replace(/[\\[\\]]/g, '')\n  }\n}));"
+      },
+      "name": "Extract Node IDs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"get_node_content\",\n  \"arguments\": {\n    \"file_path\": \"/path/to/research-topics.mm\",\n    \"node_id\": \"{{$json[\"nodeId\"]}}\",\n    \"include_children\": true\n  }\n}"
+      },
+      "name": "Get Node Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "query": "={{$json[\"content\"]}}",
+        "limit": 5
+      },
+      "name": "Web Search for Topic",
+      "type": "n8n-nodes-base.googleSearch",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format search results as mind map nodes\nconst searchResults = items[0].json.results || [];\nconst children = searchResults.map(result => ({\n  text: `${result.title}: ${result.snippet}`,\n  attributes: {\n    '@_LINK': result.link\n  }\n}));\n\nreturn [{\n  json: {\n    nodeId: items[0].json.nodeId,\n    children: children\n  }\n}];"
+      },
+      "name": "Format Research Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "http://localhost:3000/mcp/call-tool",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"tool\": \"add_child_nodes\",\n  \"arguments\": {\n    \"file_path\": \"/path/to/research-topics.mm\",\n    \"parent_node_id\": \"{{$json[\"nodeId\"]}}\",\n    \"children\": {{$json[\"children\"]}}\n  }\n}"
+      },
+      "name": "Add Research to Mind Map",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Read Research Mind Map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Research Mind Map": {
+      "main": [
+        [
+          {
+            "node": "Find Nodes Needing Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Nodes Needing Research": {
+      "main": [
+        [
+          {
+            "node": "Extract Node IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Node IDs": {
+      "main": [
+        [
+          {
+            "node": "Get Node Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Node Details": {
+      "main": [
+        [
+          {
+            "node": "Web Search for Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web Search for Topic": {
+      "main": [
+        [
+          {
+            "node": "Format Research Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Research Results": {
+      "main": [
+        [
+          {
+            "node": "Add Research to Mind Map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
