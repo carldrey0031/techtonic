@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supergateway",
+        "--streamableHttp",
+        "https://n8n.techtonic.works/mcp-server/http",
+        "--header",
+        "authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4MzliNjExNy0wYTYzLTRjZDQtOWNmZi0zNTkxZjZmOGIyZmMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU2NDExMjA2LCJleHAiOjE3OTI0NDcyMDB9.42u0v9pbehjcMRHSN2KvxRGNforv1BJm1H1CzdlEZ90"
+      ]
+    }
+  }
+}
