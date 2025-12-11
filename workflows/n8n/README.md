@@ -23,13 +23,20 @@ This workflow automatically collects and aggregates Bolt Fleet data to provide d
 
 ### Workflow Nodes
 
-1. **Schedule** - Cron trigger that runs every 5 minutes
-2. **Get Token** - Obtains OAuth access token from Bolt OIDC endpoint
-3. **Drivers** - Fetches current driver list
-4. **Daily Payouts** - Retrieves daily payout information
-5. **Trips Today** - Gets aggregated trip data for today
-6. **Trips 7d** - Gets aggregated trip data for the last 7 days
-7. **Summary** - Processes and combines all data into a summary object
+1. **Schedule** - Schedule Trigger that runs every 5 minutes
+2. **Get Token** - HTTP Request node that obtains OAuth access token from Bolt OIDC endpoint
+3. **Drivers** - HTTP Request node that fetches current driver list
+4. **Daily Payouts** - HTTP Request node that retrieves daily payout information
+5. **Trips Today** - HTTP Request node that gets aggregated trip data for today
+6. **Trips 7d** - HTTP Request node that gets aggregated trip data for the last 7 days
+7. **Summary** - Code node that processes and combines all data into a summary object
+
+### Workflow Structure
+
+The workflow uses parallel execution for optimal performance:
+- After obtaining the OAuth token, four HTTP requests execute in parallel
+- All four API responses are then merged in the Summary node
+- The Summary node receives inputs in order: Drivers, Daily Payouts, Trips Today, Trips 7d
 
 ### Output Format
 
@@ -86,9 +93,20 @@ After the workflow is running, you can:
 - Create visualization dashboards
 - Set up alerts based on specific thresholds
 
-### Notes
+### Technical Notes
 
-- The workflow uses OAuth 2.0 with client credentials grant type
+- **Node Versions**: Uses latest n8n node versions (HTTP Request v4.1, Schedule Trigger v1.1, Code v2)
+- **Authentication**: OAuth 2.0 with client credentials grant type
+- **Execution**: Parallel execution for API calls to minimize total execution time
+- **Code Node**: Uses modern `$input.all()` syntax instead of legacy `items` array
 - API responses may vary based on your Bolt Fleet account permissions
-- Adjust the cron schedule as needed for your use case
-- The summary function can be customized to calculate additional metrics
+- Adjust the schedule interval as needed for your use case (default: 5 minutes)
+- The summary code can be customized to calculate additional metrics or change output format
+
+### Troubleshooting
+
+If you encounter import errors:
+- Ensure you're using n8n version 1.0 or later
+- Check that all required node types are available in your n8n instance
+- Verify the JSON file is not corrupted
+- Try importing via "Workflows > Import from File" rather than copy-paste
