@@ -1,0 +1,207 @@
+{
+  "name": "Bolt Fleet Daily/Weekly Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "unit": "minutes",
+              "value": 5
+            }
+          ]
+        }
+      },
+      "id": "1",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://oidc.bolt.eu/token",
+        "jsonParameters": false,
+        "options": {
+          "bodyContentType": "form-urlencoded"
+        },
+        "sendBody": true,
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "client_id", "value": "={{$env.BOLT_CLIENT_ID}}" },
+            { "name": "client_secret", "value": "={{$env.BOLT_CLIENT_SECRET}}" },
+            { "name": "grant_type", "value": "client_credentials" },
+            { "name": "scope", "value": "fleet-integration:api" }
+          ]
+        }
+      },
+      "name": "Get Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [300, 200]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://api.bolt.eu/fleet/drivers",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "Authorization": "={{'Bearer ' + $json.access_token}}"
+          }
+        }
+      },
+      "name": "Drivers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [540, 80]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://api.bolt.eu/fleet/payouts/daily",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "Authorization": "={{'Bearer ' + $json.access_token}}"
+          }
+        }
+      },
+      "name": "Daily Payouts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [540, 200]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://api.bolt.eu/fleet/trips/daily?aggregate=true",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "Authorization": "={{'Bearer ' + $json.access_token}}"
+          }
+        }
+      },
+      "name": "Trips Today",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [540, 320]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://api.bolt.eu/fleet/trips?days=7&aggregate=true",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "Authorization": "={{'Bearer ' + $json.access_token}}"
+          }
+        }
+      },
+      "name": "Trips 7d",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [540, 440]
+    },
+    {
+      "parameters": {
+        "functionCode": "const drivers = items[0].json.drivers || [];\nconst dailyPayouts = items[1].json || {};\nconst tripsToday = items[2].json || {};\nconst trips7d = items[3].json || {};\n\n// Adjust property names based on Bolt response schema\nconst todaysTrips = tripsToday.trips || [];\nconst trips7 = trips7d.trips || [];\n\nconst sum = (arr, fn) => arr.reduce((a, b) => a + (fn(b) || 0), 0);\n\nconst todayKm = sum(todaysTrips, t => t.distance_km);\nconst todayCash = sum(todaysTrips, t => t.cash_amount);\nconst todayInApp = sum(todaysTrips, t => t.in_app_amount);\n\nconst weekKm = sum(trips7, t => t.distance_km);\nconst weekCash = sum(trips7, t => t.cash_amount);\nconst weekInApp = sum(trips7, t => t.in_app_amount);\n\nreturn [{\n  json: {\n    driver_count: drivers.length,\n    today: {\n      trips: todaysTrips.length,\n      km: todayKm,\n      cash: todayCash,\n      in_app: todayInApp,\n      payouts: dailyPayouts\n    },\n    week: {\n      trips: trips7.length,\n      km: weekKm,\n      cash: weekCash,\n      in_app: weekInApp\n    }\n  }\n}];"
+      },
+      "name": "Summary",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [820, 260]
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Token": {
+      "main": [
+        [
+          {
+            "node": "Drivers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Daily Payouts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trips Today",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trips 7d",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drivers": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Payouts": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Trips Today": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Trips 7d": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    }
+  }
+}
