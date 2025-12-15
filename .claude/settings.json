@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supergateway",
+        "--streamableHttp",
+        "https://n8n.techtonic.works/mcp-server/http",
+        "--header",
+        "authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4MzliNjExNy0wYTYzLTRjZDQtOWNmZi0zNTkxZjZmOGIyZmMiLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6IjczN2IyZjk4LTMwN2YtNDI5Yi1iM2NkLTMwZjRmY2NmOGNkMiIsImlhdCI6MTc2NDc2MTM2MH0.GzdKp9Hw81mJrq96dSmJIWguEBxBKQw2hEJKSLA3xoQ"
+      ]
+    }
+  }
+}
