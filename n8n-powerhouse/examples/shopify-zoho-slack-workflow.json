@@ -1,0 +1,314 @@
+{
+  "name": "Shopify Order → Zoho CRM + Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "topic": "orders/create"
+      },
+      "id": "shopify-trigger",
+      "name": "Shopify Order Created",
+      "type": "n8n-nodes-base.shopifyTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "shopify-orders",
+      "credentials": {
+        "shopifyApi": {
+          "id": "1",
+          "name": "Shopify Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "name": "email",
+              "value": "={{ $json.email }}",
+              "type": "string"
+            },
+            {
+              "name": "firstName",
+              "value": "={{ $json.customer.first_name }}",
+              "type": "string"
+            },
+            {
+              "name": "lastName",
+              "value": "={{ $json.customer.last_name }}",
+              "type": "string"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $json.customer.phone }}",
+              "type": "string"
+            },
+            {
+              "name": "orderId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "name": "orderNumber",
+              "value": "={{ $json.order_number }}",
+              "type": "string"
+            },
+            {
+              "name": "totalPrice",
+              "value": "={{ $json.total_price }}",
+              "type": "string"
+            },
+            {
+              "name": "currency",
+              "value": "={{ $json.currency }}",
+              "type": "string"
+            },
+            {
+              "name": "shopifyCustomerId",
+              "value": "={{ $json.customer.id }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "extract-customer",
+      "name": "Extract Customer Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "getAll",
+        "options": {
+          "criteria": "=(Email:equals:{{ $json.email }})"
+        },
+        "returnAll": false,
+        "limit": 1
+      },
+      "id": "check-zoho",
+      "name": "Check Customer Exists",
+      "type": "n8n-nodes-base.zohoCrm",
+      "typeVersion": 1,
+      "position": [690, 300],
+      "credentials": {
+        "zohoCrmOAuth2Api": {
+          "id": "2",
+          "name": "Zoho CRM Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-exists",
+      "name": "Customer Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [910, 300]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "create",
+        "firstName": "={{ $node['Extract Customer Data'].json.firstName }}",
+        "lastName": "={{ $node['Extract Customer Data'].json.lastName }}",
+        "additionalFields": {
+          "email": "={{ $node['Extract Customer Data'].json.email }}",
+          "phone": "={{ $node['Extract Customer Data'].json.phone }}",
+          "description": "Customer from Shopify Order #{{ $node['Extract Customer Data'].json.orderNumber }}"
+        }
+      },
+      "id": "create-contact",
+      "name": "Create New Contact",
+      "type": "n8n-nodes-base.zohoCrm",
+      "typeVersion": 1,
+      "position": [1130, 200],
+      "credentials": {
+        "zohoCrmOAuth2Api": {
+          "id": "2",
+          "name": "Zoho CRM Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "update",
+        "contactId": "={{ $json[0].id }}",
+        "updateFields": {
+          "phone": "={{ $node['Extract Customer Data'].json.phone }}",
+          "description": "Updated from Shopify Order #{{ $node['Extract Customer Data'].json.orderNumber }}"
+        }
+      },
+      "id": "update-contact",
+      "name": "Update Existing Contact",
+      "type": "n8n-nodes-base.zohoCrm",
+      "typeVersion": 1,
+      "position": [1130, 400],
+      "credentials": {
+        "zohoCrmOAuth2Api": {
+          "id": "2",
+          "name": "Zoho CRM Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "name": "slackMessage",
+              "value": "=🛒 *New Shopify Order*\\n\\n*Customer:* {{ $node['Extract Customer Data'].json.firstName }} {{ $node['Extract Customer Data'].json.lastName }}\\n*Email:* {{ $node['Extract Customer Data'].json.email }}\\n*Order #:* {{ $node['Extract Customer Data'].json.orderNumber }}\\n*Total:* {{ $node['Extract Customer Data'].json.currency }} {{ $node['Extract Customer Data'].json.totalPrice }}\\n\\n✅ Synced to Zoho CRM",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "format-slack",
+      "name": "Format Slack Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "channel": "#sales",
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {
+          "username": "Shopify Bot"
+        }
+      },
+      "id": "send-slack",
+      "name": "Send Slack Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1570, 300],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "3",
+          "name": "Slack Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Shopify Order Created": {
+      "main": [
+        [
+          {
+            "node": "Extract Customer Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Customer Data": {
+      "main": [
+        [
+          {
+            "node": "Check Customer Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Customer Exists": {
+      "main": [
+        [
+          {
+            "node": "Customer Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Exists?": {
+      "main": [
+        [
+          {
+            "node": "Update Existing Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Contact": {
+      "main": [
+        [
+          {
+            "node": "Format Slack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Existing Contact": {
+      "main": [
+        [
+          {
+            "node": "Format Slack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Slack Message": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": [
+    {
+      "id": "shopify",
+      "name": "Shopify"
+    },
+    {
+      "id": "zoho",
+      "name": "Zoho CRM"
+    },
+    {
+      "id": "slack",
+      "name": "Slack"
+    }
+  ]
+}
