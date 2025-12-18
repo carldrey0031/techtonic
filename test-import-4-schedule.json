@@ -1,0 +1,67 @@
+{
+  "name": "Test 4 - Schedule Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ],
+          "hour": 9,
+          "minute": 0,
+          "timezone": "America/New_York"
+        }
+      },
+      "id": "1",
+      "name": "Daily 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "result",
+              "value": "Schedule trigger works!",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [450, 300]
+    }
+  ],
+  "connections": {
+    "Daily 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-12-17T00:00:00.000Z",
+  "versionId": "1"
+}
