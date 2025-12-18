@@ -1,0 +1,491 @@
+{
+  "name": "X Profile Analyzer - FREE TIER (Optimized)",
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        460
+      ],
+      "notes": "Run daily at 9 AM or trigger manually"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "config-1",
+              "name": "xUsername",
+              "value": "YourTwitterHandle",
+              "type": "string"
+            },
+            {
+              "id": "config-2",
+              "name": "tweetLimit",
+              "value": 20,
+              "type": "number"
+            },
+            {
+              "id": "config-3",
+              "name": "trendingSearchLimit",
+              "value": 10,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        460
+      ],
+      "notes": "Set your X username and limits"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.twitter.com/2/users/by/username/{{ $json.xUsername }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "twitterOAuth2Api",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user.fields",
+              "value": "description,public_metrics,created_at,location,entities"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-profile",
+      "name": "Get X User Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        460
+      ],
+      "notes": "Fetch user profile data"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.twitter.com/2/users/{{ $json.data.id }}/tweets",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "twitterOAuth2Api",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "max_results",
+              "value": "={{ $('Configuration').item.json.tweetLimit }}"
+            },
+            {
+              "name": "tweet.fields",
+              "value": "created_at,public_metrics,entities"
+            },
+            {
+              "name": "exclude",
+              "value": "retweets,replies"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-tweets",
+      "name": "Get Recent Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        460
+      ],
+      "notes": "Fetch last 100 original tweets (no RTs/replies)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Combine profile and tweets for AI analysis\nconst profile = $('Get X User Profile').first().json.data;\nconst tweets = $('Get Recent Tweets').first().json.data || [];\n\n// Extract tweet texts\nconst tweetTexts = tweets.map(t => t.text).join('\\n---\\n');\n\n// Calculate tweet statistics\nconst totalLikes = tweets.reduce((sum, t) => sum + (t.public_metrics?.like_count || 0), 0);\nconst totalRetweets = tweets.reduce((sum, t) => sum + (t.public_metrics?.retweet_count || 0), 0);\nconst avgLikes = tweets.length > 0 ? Math.round(totalLikes / tweets.length) : 0;\nconst avgRetweets = tweets.length > 0 ? Math.round(totalRetweets / tweets.length) : 0;\n\n// Detect emoji usage\nconst emojiRegex = /\\p{Emoji}/gu;\nconst emojiCount = (tweetTexts.match(emojiRegex) || []).length;\nconst emojiPerTweet = tweets.length > 0 ? (emojiCount / tweets.length).toFixed(2) : 0;\n\nreturn {\n  username: profile.username,\n  name: profile.name,\n  bio: profile.description || 'No bio',\n  location: profile.location || 'Not specified',\n  followerCount: profile.public_metrics.followers_count,\n  followingCount: profile.public_metrics.following_count,\n  tweetCount: profile.public_metrics.tweet_count,\n  accountAge: Math.floor((Date.now() - new Date(profile.created_at)) / (1000 * 60 * 60 * 24 * 365)),\n  recentTweets: tweetTexts,\n  tweetStats: {\n    count: tweets.length,\n    avgLikes,\n    avgRetweets,\n    emojiPerTweet\n  }\n};"
+      },
+      "id": "prepare-analysis",
+      "name": "Prepare Profile Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        460
+      ],
+      "notes": "Combine and structure data for AI analysis"
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "model": {
+          "__rl": true,
+          "value": "claude-3-5-sonnet-20241022",
+          "mode": "list",
+          "cachedResultName": "claude-3-5-sonnet-20241022"
+        },
+        "text": "=# Profile Analysis Task\n\nAnalyze this X/Twitter user and create a comprehensive profile.\n\n## User Data:\n\n**Username:** @{{ $json.username }}\n**Display Name:** {{ $json.name }}\n**Bio:** {{ $json.bio }}\n**Location:** {{ $json.location }}\n**Account Stats:**\n- Followers: {{ $json.followerCount }}\n- Following: {{ $json.followingCount }}\n- Total Tweets: {{ $json.tweetCount }}\n- Account Age: {{ $json.accountAge }} years\n\n**Recent Tweet Statistics:**\n- Analyzed Tweets: {{ $json.tweetStats.count }}\n- Avg Likes: {{ $json.tweetStats.avgLikes }}\n- Avg Retweets: {{ $json.tweetStats.avgRetweets }}\n- Emojis per Tweet: {{ $json.tweetStats.emojiPerTweet }}\n\n**Recent Tweets (Last {{ $json.tweetStats.count }}):**\n```\n{{ $json.recentTweets }}\n```\n\n## Analysis Required:\n\nProvide a detailed profile in JSON format with:\n\n1. **personality_type**: MBTI or detailed personality description\n2. **humor_style**: Type of humor (witty, sarcastic, wholesome, memes, etc.)\n3. **expertise_areas**: Array of 3-5 main topics/skills (be specific)\n4. **writing_style**: \n   - tone (professional, casual, friendly, technical, etc.)\n   - sentence_length (short/medium/long)\n   - punctuation_style (minimal, standard, heavy)\n   - emoji_usage (none, rare, moderate, frequent)\n   - common_phrases (array of 3-5 phrases they use often)\n5. **engagement_triggers**: What topics get most engagement\n6. **content_themes**: Main themes in their tweets\n7. **search_keywords**: 10-15 keywords to find relevant trending tweets (be specific to their niche)\n\nReturn ONLY valid JSON, no explanations.",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2000
+        }
+      },
+      "id": "ai-profile",
+      "name": "AI Profile Analysis",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        460
+      ],
+      "notes": "AI analyzes personality, style, and expertise"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse AI response and extract profile\nconst aiResponse = $input.first().json.response || $input.first().json.text || $input.first().json.content?.[0]?.text || '';\n\n// Clean and parse JSON\nlet profile;\ntry {\n  // Remove markdown code blocks if present\n  const cleaned = aiResponse.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  profile = JSON.parse(cleaned);\n} catch (e) {\n  // Fallback if JSON parsing fails\n  profile = {\n    personality_type: \"Unknown\",\n    humor_style: \"Mixed\",\n    expertise_areas: [\"Technology\", \"Business\"],\n    writing_style: {\n      tone: \"Professional\",\n      emoji_usage: \"moderate\"\n    },\n    search_keywords: [\"tech\", \"AI\", \"startup\", \"development\"]\n  };\n}\n\n// Preserve original data\nconst originalData = $('Prepare Profile Data').first().json;\n\nreturn {\n  ...originalData,\n  profile\n};"
+      },
+      "id": "parse-profile",
+      "name": "Parse Profile JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        460
+      ],
+      "notes": "Extract and validate profile data"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Build search queries from profile keywords - OPTIMIZED FOR FREE TIER\nconst profile = $input.first().json.profile;\nconst keywords = profile.search_keywords || [];\n\n// Create ONLY 1 search query (saves API quota)\nconst queries = [];\n\n// Single combined query with top 5 keywords\nif (keywords.length >= 3) {\n  const topKeywords = keywords.slice(0, 5).join(' OR ');\n  queries.push(`(${topKeywords}) -is:retweet -is:reply lang:en`);\n} else if (keywords.length > 0) {\n  queries.push(`(${keywords.join(' OR ')}) -is:retweet -is:reply lang:en`);\n}\n\nreturn queries.map(query => ({\n  query,\n  profile: $input.first().json\n}));"
+      },
+      "id": "build-searches",
+      "name": "Build Search Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        460
+      ],
+      "notes": "FREE TIER: Creates 1 query instead of 3-4"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.twitter.com/2/tweets/search/recent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "twitterOAuth2Api",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "max_results",
+              "value": "10"
+            },
+            {
+              "name": "tweet.fields",
+              "value": "created_at,public_metrics,author_id,conversation_id"
+            },
+            {
+              "name": "expansions",
+              "value": "author_id"
+            },
+            {
+              "name": "user.fields",
+              "value": "username,name,verified"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "search-tweets",
+      "name": "Search Trending Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        460
+      ],
+      "notes": "FREE TIER: Returns 10 tweets instead of 20"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Combine all search results\nconst allResults = [];\nconst profile = $input.first().json.profile;\n\nfor (const item of $input.all()) {\n  const tweets = item.json.data || [];\n  const users = item.json.includes?.users || [];\n  \n  // Create user lookup\n  const userMap = {};\n  users.forEach(u => userMap[u.id] = u);\n  \n  // Enrich tweets with user info\n  tweets.forEach(tweet => {\n    const author = userMap[tweet.author_id] || {};\n    allResults.push({\n      tweet_id: tweet.id,\n      text: tweet.text,\n      created_at: tweet.created_at,\n      likes: tweet.public_metrics?.like_count || 0,\n      retweets: tweet.public_metrics?.retweet_count || 0,\n      replies: tweet.public_metrics?.reply_count || 0,\n      author: {\n        id: tweet.author_id,\n        username: author.username || 'unknown',\n        name: author.name || 'Unknown User',\n        verified: author.verified || false\n      },\n      url: `https://twitter.com/${author.username || 'user'}/status/${tweet.id}`\n    });\n  });\n}\n\n// Remove duplicates by tweet_id\nconst unique = Array.from(new Map(allResults.map(t => [t.tweet_id, t])).values());\n\n// Sort by engagement (likes + retweets)\nunique.sort((a, b) => {\n  const scoreA = a.likes + (a.retweets * 2);\n  const scoreB = b.likes + (b.retweets * 2);\n  return scoreB - scoreA;\n});\n\nreturn {\n  tweets: unique.slice(0, 30),\n  profile\n};"
+      },
+      "id": "aggregate-tweets",
+      "name": "Aggregate & Rank Tweets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        460
+      ],
+      "notes": "Combine results and rank by engagement"
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "model": {
+          "__rl": true,
+          "value": "claude-3-5-sonnet-20241022",
+          "mode": "list",
+          "cachedResultName": "claude-3-5-sonnet-20241022"
+        },
+        "text": "=# Tweet Selection & Response Generation\n\n## Your Profile:\n{{ JSON.stringify($json.profile, null, 2) }}\n\n## Candidate Tweets:\n{{ JSON.stringify($json.tweets, null, 2) }}\n\n## Task:\n\n1. **Select the 10 BEST tweets** for this user to respond to based on:\n   - Relevance to their expertise\n   - Opportunity to add value\n   - Engagement potential (but not just high follower accounts)\n   - Conversation fit for their personality/humor style\n\n2. **For each selected tweet, generate a response** that:\n   - Matches their writing style (tone, length, punctuation)\n   - Uses appropriate emoji frequency\n   - Reflects their humor style\n   - Adds genuine value/insight\n   - Feels authentic to their voice\n   - Is 1-3 sentences (match their typical length)\n\n3. **Return JSON** with this exact structure:\n```json\n{\n  \"suggestions\": [\n    {\n      \"tweet_id\": \"123...\",\n      \"tweet_text\": \"Original tweet text\",\n      \"tweet_url\": \"https://twitter.com/...\",\n      \"author\": \"@username\",\n      \"relevance_score\": 95,\n      \"why_respond\": \"Brief reason why this is a good match\",\n      \"suggested_response\": \"Your pre-filled response text here\",\n      \"response_strategy\": \"agree|disagree|add_insight|ask_question|humor\"\n    }\n  ]\n}\n```\n\nReturn ONLY valid JSON, no markdown.",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 3000
+        }
+      },
+      "id": "ai-suggestions",
+      "name": "AI Generate Suggestions",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.1,
+      "position": [
+        2440,
+        460
+      ],
+      "notes": "AI selects tweets and generates responses"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse AI suggestions\nconst aiResponse = $input.first().json.response || $input.first().json.text || $input.first().json.content?.[0]?.text || '';\n\nlet suggestions;\ntry {\n  const cleaned = aiResponse.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  suggestions = JSON.parse(cleaned);\n} catch (e) {\n  console.error('Failed to parse AI response:', e);\n  return {\n    error: 'Failed to parse AI suggestions',\n    raw: aiResponse\n  };\n}\n\nreturn suggestions;"
+      },
+      "id": "parse-suggestions",
+      "name": "Parse Suggestions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        460
+      ],
+      "notes": "Extract suggestion data"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "slack-1",
+              "name": "slackMessage",
+              "value": "=\ud83c\udfaf *Daily Tweet Suggestions* - {{ $now.toFormat('MMM dd, yyyy') }}\n\n{{ $json.suggestions.map((s, i) => `\n*${i + 1}. Tweet from @${s.author}* (Score: ${s.relevance_score}/100)\n\ud83d\udcdd _\"${s.tweet_text.substring(0, 100)}${s.tweet_text.length > 100 ? '...' : ''}_\"\n\ud83d\udd17 ${s.tweet_url}\n\n\ud83d\udca1 *Why respond:* ${s.why_respond}\n\u270d\ufe0f *Suggested reply:*\n> ${s.suggested_response}\n\n*Strategy:* ${s.response_strategy}\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`).join('\\n') }}\n\n\ud83e\udd16 Generated by AI based on your profile and writing style",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-slack",
+      "name": "Format Slack Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2880,
+        460
+      ],
+      "notes": "Create formatted Slack notification"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "channel": {
+          "__rl": true,
+          "value": "#twitter-suggestions",
+          "mode": "name"
+        },
+        "messageType": "text",
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {
+          "username": "X Engagement Bot",
+          "icon_emoji": ":bird:"
+        }
+      },
+      "id": "send-slack",
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        3100,
+        460
+      ],
+      "notes": "Deliver daily suggestions to Slack"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuration": {
+      "main": [
+        [
+          {
+            "node": "Get X User Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get X User Profile": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Tweets": {
+      "main": [
+        [
+          {
+            "node": "Prepare Profile Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Profile Data": {
+      "main": [
+        [
+          {
+            "node": "AI Profile Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Profile Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Profile JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Profile JSON": {
+      "main": [
+        [
+          {
+            "node": "Build Search Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Queries": {
+      "main": [
+        [
+          {
+            "node": "Search Trending Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Trending Tweets": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Rank Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate & Rank Tweets": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Suggestions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Suggestions": {
+      "main": [
+        [
+          {
+            "node": "Parse Suggestions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Suggestions": {
+      "main": [
+        [
+          {
+            "node": "Format Slack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Slack Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-12-17T00:00:00.000Z",
+  "versionId": "1"
+}
