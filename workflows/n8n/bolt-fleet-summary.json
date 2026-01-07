@@ -161,14 +161,29 @@
     },
     {
       "parameters": {
-        "jsCode": "const drivers = $input.all()[0].json.drivers || [];\nconst dailyPayouts = $input.all()[1].json || {};\nconst tripsToday = $input.all()[2].json || {};\nconst trips7d = $input.all()[3].json || {};\n\n// Adjust property names based on Bolt response schema\nconst todaysTrips = tripsToday.trips || [];\nconst trips7 = trips7d.trips || [];\n\nconst sum = (arr, fn) => arr.reduce((a, b) => a + (fn(b) || 0), 0);\n\nconst todayKm = sum(todaysTrips, t => t.distance_km);\nconst todayCash = sum(todaysTrips, t => t.cash_amount);\nconst todayInApp = sum(todaysTrips, t => t.in_app_amount);\n\nconst weekKm = sum(trips7, t => t.distance_km);\nconst weekCash = sum(trips7, t => t.cash_amount);\nconst weekInApp = sum(trips7, t => t.in_app_amount);\n\nreturn {\n  driver_count: drivers.length,\n  today: {\n    trips: todaysTrips.length,\n    km: todayKm,\n    cash: todayCash,\n    in_app: todayInApp,\n    payouts: dailyPayouts\n  },\n  week: {\n    trips: trips7.length,\n    km: weekKm,\n    cash: weekCash,\n    in_app: weekInApp\n  }\n};"
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "g7h8i9j0-k1l2-4m5n-6o7p-8q9r0s1t2u3v",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        900,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all merged items\nconst items = $input.all();\n\n// Extract data from each position\n// Position 0: Drivers, 1: Payouts, 2: Trips Today, 3: Trips 7d\nconst driversData = items.find(item => item.json.drivers) || { json: { drivers: [] } };\nconst payoutsData = items.find(item => item.json.total_amount !== undefined || item.json.payouts) || { json: {} };\nconst tripsTodayData = items.find(item => item.json.trips && item.json.period === 'today') || \n                       items.find(item => item.json.trips && !item.json.period) || \n                       { json: { trips: [] } };\nconst trips7dData = items.find(item => item.json.trips && item.json.period === 'week') || \n                    items[items.length - 1] || \n                    { json: { trips: [] } };\n\nconst drivers = driversData.json.drivers || [];\nconst dailyPayouts = payoutsData.json || {};\nconst todaysTrips = tripsTodayData.json.trips || tripsTodayData.json.data || [];\nconst trips7 = trips7dData.json.trips || trips7dData.json.data || [];\n\n// Helper function to sum array values\nconst sum = (arr, fn) => arr.reduce((a, b) => a + (fn(b) || 0), 0);\n\n// Calculate today's metrics\nconst todayKm = sum(todaysTrips, t => t.distance_km || t.distance);\nconst todayCash = sum(todaysTrips, t => t.cash_amount || t.cash);\nconst todayInApp = sum(todaysTrips, t => t.in_app_amount || t.amount);\n\n// Calculate weekly metrics\nconst weekKm = sum(trips7, t => t.distance_km || t.distance);\nconst weekCash = sum(trips7, t => t.cash_amount || t.cash);\nconst weekInApp = sum(trips7, t => t.in_app_amount || t.amount);\n\n// Return summary object\nreturn {\n  driver_count: drivers.length,\n  today: {\n    trips: todaysTrips.length,\n    km: todayKm.toFixed(2),\n    cash: todayCash.toFixed(2),\n    in_app: todayInApp.toFixed(2),\n    total: (todayCash + todayInApp).toFixed(2),\n    payouts: dailyPayouts\n  },\n  week: {\n    trips: trips7.length,\n    km: weekKm.toFixed(2),\n    cash: weekCash.toFixed(2),\n    in_app: weekInApp.toFixed(2),\n    total: (weekCash + weekInApp).toFixed(2)\n  },\n  timestamp: new Date().toISOString()\n};"
       },
       "id": "a7b8c9d0-e1f2-4a5b-4c5d-6e7f8a9b0c1d",
       "name": "Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        900,
+        1120,
         320
       ]
     }
@@ -215,7 +230,7 @@
       "main": [
         [
           {
-            "node": "Summary",
+            "node": "Merge Data",
             "type": "main",
             "index": 0
           }
@@ -226,9 +241,9 @@
       "main": [
         [
           {
-            "node": "Summary",
+            "node": "Merge Data",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -237,14 +252,25 @@
       "main": [
         [
           {
-            "node": "Summary",
+            "node": "Merge Data",
             "type": "main",
-            "index": 0
+            "index": 2
           }
         ]
       ]
     },
     "Trips 7d": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
       "main": [
         [
           {
@@ -264,5 +290,5 @@
   "tags": [],
   "triggerCount": 0,
   "updatedAt": "2024-12-11T00:00:00.000Z",
-  "versionId": "1"
+  "versionId": "2"
 }
