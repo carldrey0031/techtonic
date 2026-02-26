@@ -1,0 +1,15 @@
+# Claude Code internal state
+.claude/
+CLAUDE*.md
+
+# Draft / backup files
+index copy.html
+index copy 2.html
+
+# Reference images (not needed in production)
+cdtr.png
+brand_assets/dribbble.com_shots_23579742-AI-dev-agency-Website.png
+brand_assets/brand guidelines.png
+
+# OS
+.DS_Store
